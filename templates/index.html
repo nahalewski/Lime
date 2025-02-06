@@ -11,27 +11,37 @@
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Music Server</h1>
         
-        <!-- Upload Section -->
-        <div class="mb-8">
-            <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6">
-                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-colors">
-                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
-                    <p class="text-gray-600">Drag and drop music files here or click to select</p>
-                    <input type="file" id="file-input" multiple accept="audio/*" class="hidden">
-                </div>
-                <div id="upload-progress" class="mt-4 hidden">
-                    <div class="bg-gray-200 rounded-full h-2">
-                        <div class="bg-blue-500 rounded-full h-2 w-0 transition-all" id="progress-bar"></div>
-                    </div>
+        <!-- Music Library -->
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Music Library</h2>
+            <div id="song-count" class="text-gray-600 mb-4"></div>
+            <div id="song-list" class="space-y-2">
+                <!-- Songs will be populated here -->
+                <div class="text-gray-500 text-center py-8" id="no-songs-message">
+                    No songs uploaded yet
                 </div>
             </div>
         </div>
 
-        <!-- Music Library -->
-        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Music Library</h2>
-            <div id="song-list" class="space-y-2">
-                <!-- Songs will be populated here -->
+        <!-- Upload Section -->
+        <div class="mb-8">
+            <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Upload Music</h2>
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-colors">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                    <p class="text-gray-600">Drag and drop music files here or click to select</p>
+                    <p class="text-sm text-gray-500 mt-2">Supported formats: MP3, WAV, FLAC, M4A</p>
+                    <input type="file" id="file-input" multiple accept="audio/*" class="hidden">
+                </div>
+                <div id="upload-progress" class="mt-4 hidden">
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm text-gray-600">Uploading...</span>
+                        <span class="text-sm text-gray-600" id="progress-text">0%</span>
+                    </div>
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-500 rounded-full h-2 w-0 transition-all duration-300" id="progress-bar"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -41,8 +51,11 @@
             const dropZone = document.getElementById('drop-zone');
             const fileInput = document.getElementById('file-input');
             const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
             const uploadProgress = document.getElementById('upload-progress');
             const songList = document.getElementById('song-list');
+            const songCount = document.getElementById('song-count');
+            const noSongsMessage = document.getElementById('no-songs-message');
 
             // Handle drag and drop
             dropZone.addEventListener('dragover', (e) => {
@@ -69,6 +82,11 @@
                 handleFiles(fileInput.files);
             });
 
+            function updateProgress(percent) {
+                progressBar.style.width = `${percent}%`;
+                progressText.textContent = `${Math.round(percent)}%`;
+            }
+
             function handleFiles(files) {
                 uploadProgress.classList.remove('hidden');
                 const formData = new FormData();
@@ -77,20 +95,48 @@
                     formData.append('files[]', file);
                 }
 
-                fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    console.log(data);
-                    loadSongs();
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/upload', true);
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        updateProgress(percent);
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        console.log(response);
+                        loadSongs();
+                    } else {
+                        console.error('Upload failed');
+                    }
+                    setTimeout(() => {
+                        uploadProgress.classList.add('hidden');
+                        updateProgress(0);
+                    }, 1000);
+                };
+
+                xhr.onerror = function() {
+                    console.error('Upload failed');
                     uploadProgress.classList.add('hidden');
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    uploadProgress.classList.add('hidden');
-                });
+                    updateProgress(0);
+                };
+
+                xhr.send(formData);
+            }
+
+            function formatDate(dateString) {
+                const options = { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                };
+                return new Date(dateString).toLocaleDateString(undefined, options);
             }
 
             function loadSongs() {
@@ -98,35 +144,56 @@
                     .then(response => response.json())
                     .then(songs => {
                         songList.innerHTML = '';
-                        songs.forEach(song => {
-                            const songElement = document.createElement('div');
-                            songElement.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
-                            songElement.innerHTML = `
-                                <div>
-                                    <h3 class="font-medium">${song.title || song.filename}</h3>
-                                    <p class="text-sm text-gray-500">${new Date(song.uploaded_at).toLocaleDateString()}</p>
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button onclick="playSong(${song.id})" class="text-blue-500 hover:text-blue-700">
-                                        <i class="fas fa-play"></i>
-                                    </button>
-                                    <button onclick="deleteSong(${song.id})" class="text-red-500 hover:text-red-700">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            `;
-                            songList.appendChild(songElement);
-                        });
+                        if (songs.length === 0) {
+                            noSongsMessage.classList.remove('hidden');
+                            songCount.textContent = 'No songs in library';
+                        } else {
+                            noSongsMessage.classList.add('hidden');
+                            songCount.textContent = `${songs.length} song${songs.length === 1 ? '' : 's'} in library`;
+                            
+                            songs.forEach(song => {
+                                const songElement = document.createElement('div');
+                                songElement.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors';
+                                songElement.innerHTML = `
+                                    <div class="flex-1">
+                                        <h3 class="font-medium text-gray-800">${song.title || song.filename}</h3>
+                                        <p class="text-sm text-gray-500">Uploaded ${formatDate(song.uploaded_at)}</p>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button onclick="playSong(${song.id})" class="text-blue-500 hover:text-blue-700 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        <button onclick="deleteSong(${song.id})" class="text-red-500 hover:text-red-700 transition-colors">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                `;
+                                songList.appendChild(songElement);
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading songs:', error);
+                        songCount.textContent = 'Error loading songs';
                     });
             }
 
             // Initial load
             loadSongs();
+
+            // Refresh song list every 30 seconds
+            setInterval(loadSongs, 30000);
         });
 
+        let currentAudio = null;
+
         function playSong(id) {
-            const audio = new Audio(`/api/stream/${id}`);
-            audio.play();
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            currentAudio = new Audio(`/api/stream/${id}`);
+            currentAudio.play();
         }
 
         function deleteSong(id) {
@@ -134,9 +201,13 @@
                 fetch(`/api/delete/${id}`, {
                     method: 'DELETE'
                 })
+                .then(response => response.json())
                 .then(() => {
                     document.querySelector('#song-list').innerHTML = '';
                     loadSongs();
+                })
+                .catch(error => {
+                    console.error('Error deleting song:', error);
                 });
             }
         }
