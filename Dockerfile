@@ -1,14 +1,14 @@
-FROM python:3.9-slim
+FROM python:3.9
 
 WORKDIR /app
 
 # Install system dependencies including ffmpeg
 RUN apt-get update && \
     apt-get install -y \
-    libmagic1 \
-    ffmpeg \
-    python3-dev \
-    build-essential \
+        libmagic1 \
+        ffmpeg \
+        python3-dev \
+        build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
