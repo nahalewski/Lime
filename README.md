@@ -1,74 +1,92 @@
-# Music Server
+# Lime Music Server & iOS App
 
-A modern web-based music server that allows you to upload and manage your music collection. Built with Flask and a modern web interface.
+A modern music streaming solution with YouTube download capabilities. This project consists of two main components:
+
+1. A Flask-based music server that handles:
+   - Music file storage and streaming
+   - YouTube video downloads and conversion to MP3
+   - RESTful API for client communication
+
+2. An iOS client app (Lime) that provides:
+   - Music library browsing and playback
+   - YouTube download integration
+   - Modern UI with portrait and landscape support
+   - Background audio playback
+
+## Server Requirements
+
+- Python 3.8+
+- FFmpeg
+- Required Python packages (see `requirements.txt`)
+
+## Server Installation
+
+1. Clone the repository:
+```bash
+git clone [your-repo-url]
+cd [repo-name]
+```
+
+2. Install FFmpeg:
+```bash
+# On macOS with Homebrew
+brew install ffmpeg
+
+# On Ubuntu/Debian
+sudo apt-get install ffmpeg
+```
+
+3. Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Run the server:
+```bash
+python app.py
+```
+
+The server will start on `http://localhost:5000`
+
+## Docker Support
+
+Build and run with Docker:
+
+```bash
+docker build -t music-server .
+docker run -d \
+    --name music-server \
+    -p 5000:5000 \
+    -v music-uploads:/app/uploads \
+    -v music-data:/app/data \
+    --restart unless-stopped \
+    music-server
+```
+
+## iOS App Requirements
+
+- iOS 16.0+
+- Xcode 15.0+
+- Swift 5.9+
 
 ## Features
 
-- Drag and drop multiple file upload
-- Modern web interface
-- Audio file streaming
-- Music library management
-- Docker support for easy deployment
-- Persistent storage for uploaded files
-
-## Requirements
-
-- Ubuntu Server
-- Docker (automatically installed by the installation script)
-- Port 5000 available
-
-## Installation
-
-1. Clone this repository:
-```bash
-git clone <your-repo-url>
-cd music-server
-```
-
-2. Make the installation script executable:
-```bash
-chmod +x install.sh
-```
-
-3. Run the installation script:
-```bash
-./install.sh
-```
-
-The script will:
-- Install Docker if not already installed
-- Build the Docker image
-- Create a persistent volume for uploads
-- Start the container
-
-## Manual Installation
-
-If you prefer to install manually:
-
-1. Install dependencies:
-```bash
-sudo apt-get update
-sudo apt-get install -y python3-pip libmagic1
-pip3 install -r requirements.txt
-```
-
-2. Run the server:
-```bash
-python3 app.py
-```
-
-## Usage
-
-1. Access the web interface at `http://your-server-ip:5000`
-2. Upload music files by dragging and dropping them into the upload area
-3. Manage your music library using the web interface
-
-## Security Notes
-
-- The server runs on port 5000 by default
-- Consider setting up HTTPS if exposing to the internet
-- Configure firewall rules as needed
+- Stream music from your personal server
+- Download music from YouTube
+- Beautiful, responsive UI
+- Portrait and landscape support
+- Background playback
+- Progress tracking
+- Modern iOS design patterns
 
 ## License
 
-MIT License 
+[Your chosen license]
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request 

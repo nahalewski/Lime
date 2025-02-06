@@ -5,6 +5,8 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import magic
 import logging
+import yt_dlp
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -150,6 +152,51 @@ def delete_song(song_id):
     except Exception as e:
         logger.error(f"Error deleting song {song_id}: {str(e)}")
         return jsonify({'error': 'Failed to delete song'}), 500
+
+@app.route('/api/youtube/download', methods=['POST'])
+def download_youtube():
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'No URL provided'}), 400
+            
+        url = data['url']
+        logger.info(f"Downloading from YouTube: {url}")
+        
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'outtmpl': os.path.join(UPLOAD_DIR, '%(title)s.%(ext)s'),
+            'verbose': True
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+            
+            # Create song entry
+            song = Song(
+                filename=os.path.basename(filename),
+                title=info.get('title'),
+                artist=info.get('uploader'),
+                file_path=filename
+            )
+            db.session.add(song)
+            db.session.commit()
+            
+            logger.info(f"Successfully downloaded: {filename}")
+            return jsonify({
+                'message': 'Download successful',
+                'filename': os.path.basename(filename)
+            })
+            
+    except Exception as e:
+        logger.error(f"YouTube download error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 # Create database tables
 with app.app_context():
