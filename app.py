@@ -12,11 +12,16 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Ensure data and uploads directories exist
-DATA_DIR = 'data'
-UPLOAD_DIR = 'uploads'
+# Ensure data and uploads directories exist with absolute paths
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Set permissions for directories
+os.chmod(DATA_DIR, 0o777)
+os.chmod(UPLOAD_DIR, 0o777)
 
 # Configure app
 app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
@@ -26,7 +31,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-logger.info(f"Upload directory created at {os.path.abspath(UPLOAD_DIR)}")
+logger.info(f"Upload directory created at {UPLOAD_DIR}")
 logger.info(f"Database path: {os.path.join(DATA_DIR, 'music.db')}")
 
 class Song(db.Model):
