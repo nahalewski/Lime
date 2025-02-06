@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Server</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Music Server</h1>
+        
+        <!-- Upload Section -->
+        <div class="mb-8">
+            <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6">
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-colors">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                    <p class="text-gray-600">Drag and drop music files here or click to select</p>
+                    <input type="file" id="file-input" multiple accept="audio/*" class="hidden">
+                </div>
+                <div id="upload-progress" class="mt-4 hidden">
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-500 rounded-full h-2 w-0 transition-all" id="progress-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Music Library -->
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Music Library</h2>
+            <div id="song-list" class="space-y-2">
+                <!-- Songs will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            const progressBar = document.getElementById('progress-bar');
+            const uploadProgress = document.getElementById('upload-progress');
+            const songList = document.getElementById('song-list');
+
+            // Handle drag and drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-blue-500');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('border-blue-500');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-blue-500');
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            });
+
+            dropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', () => {
+                handleFiles(fileInput.files);
+            });
+
+            function handleFiles(files) {
+                uploadProgress.classList.remove('hidden');
+                const formData = new FormData();
+                
+                for (const file of files) {
+                    formData.append('files[]', file);
+                }
+
+                fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    loadSongs();
+                    uploadProgress.classList.add('hidden');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    uploadProgress.classList.add('hidden');
+                });
+            }
+
+            function loadSongs() {
+                fetch('/api/songs')
+                    .then(response => response.json())
+                    .then(songs => {
+                        songList.innerHTML = '';
+                        songs.forEach(song => {
+                            const songElement = document.createElement('div');
+                            songElement.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+                            songElement.innerHTML = `
+                                <div>
+                                    <h3 class="font-medium">${song.title || song.filename}</h3>
+                                    <p class="text-sm text-gray-500">${new Date(song.uploaded_at).toLocaleDateString()}</p>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button onclick="playSong(${song.id})" class="text-blue-500 hover:text-blue-700">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button onclick="deleteSong(${song.id})" class="text-red-500 hover:text-red-700">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            `;
+                            songList.appendChild(songElement);
+                        });
+                    });
+            }
+
+            // Initial load
+            loadSongs();
+        });
+
+        function playSong(id) {
+            const audio = new Audio(`/api/stream/${id}`);
+            audio.play();
+        }
+
+        function deleteSong(id) {
+            if (confirm('Are you sure you want to delete this song?')) {
+                fetch(`/api/delete/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(() => {
+                    document.querySelector('#song-list').innerHTML = '';
+                    loadSongs();
+                });
+            }
+        }
+    </script>
+</body>
+</html> 
