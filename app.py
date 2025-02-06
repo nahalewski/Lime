@@ -11,16 +11,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+
+# Ensure data and uploads directories exist
+DATA_DIR = 'data'
+UPLOAD_DIR = 'uploads'
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Configure app
+app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///music.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(DATA_DIR, "music.db")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Ensure upload directory exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-logger.info(f"Upload directory created at {os.path.abspath(app.config['UPLOAD_FOLDER'])}")
+logger.info(f"Upload directory created at {os.path.abspath(UPLOAD_DIR)}")
+logger.info(f"Database path: {os.path.join(DATA_DIR, 'music.db')}")
 
 class Song(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -106,6 +113,7 @@ def upload_file():
                     continue
         
         db.session.commit()
+        logger.info(f"Successfully committed {len(uploaded_files)} files to database")
         return jsonify({
             'message': f'Successfully uploaded {len(uploaded_files)} files',
             'files': uploaded_files

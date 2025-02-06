@@ -10,16 +10,17 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
-
-# Create uploads directory and data directory, set permissions
-RUN mkdir -p uploads data && \
-    chmod 777 uploads data
+# Create uploads and data directories with proper permissions
+RUN mkdir -p /app/uploads /app/data && \
+    chmod 777 /app/uploads /app/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV SQLALCHEMY_DATABASE_URI=sqlite:///data/music.db
+
+# Copy application files
+COPY . .
 
 EXPOSE 5000
 
