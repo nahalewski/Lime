@@ -176,6 +176,38 @@ def update_youtube_settings():
         logger.error(f"Error updating YouTube settings: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/settings/youtube/verify', methods=['POST'])
+def verify_youtube_settings():
+    try:
+        data = request.get_json()
+        if not data or 'cookies' not in data:
+            return jsonify({'error': 'No cookie data provided'}), 400
+            
+        # Save cookies to file to verify them
+        with open(YOUTUBE_COOKIES_FILE, 'w') as f:
+            json.dump(data['cookies'], f)
+            
+        # Try to verify the cookies by making a test request
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+            'cookiefile': YOUTUBE_COOKIES_FILE
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            try:
+                # Try to extract info from a known video (YouTube homepage)
+                ydl.extract_info("https://www.youtube.com", download=False)
+                return jsonify({'message': 'Authentication verified'})
+            except Exception as e:
+                logger.error(f"Failed to verify YouTube cookies: {str(e)}")
+                return jsonify({'error': 'Invalid or expired authentication'}), 401
+                
+    except Exception as e:
+        logger.error(f"Error verifying YouTube settings: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/youtube/download', methods=['POST'])
 def download_youtube():
     try:
@@ -196,46 +228,93 @@ def download_youtube():
                 logger.error(f"Error loading YouTube cookies: {str(e)}")
         
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': data.get('format', 'bestaudio/best'),
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
+                'preferredcodec': data.get('audio_format', 'mp3'),
+                'preferredquality': data.get('audio_quality', '192'),
             }],
             'outtmpl': os.path.join(UPLOAD_DIR, '%(title)s.%(ext)s'),
             'verbose': True,
             'cookiefile': YOUTUBE_COOKIES_FILE if cookies else None,
             'cookiesfrombrowser': None,  # Disable browser cookies when using file
-            'extractor_args': {'youtube': {
-                'player_client': ['android', 'web'],
-                'player_skip': [],  # Don't skip anything when authenticated
-            }},
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'player_skip': [],
+                }
+            },
+            'http_headers': {
+                'User-Agent': request.headers.get('User-Agent', 'Mozilla/5.0'),
+                'Accept': request.headers.get('Accept', '*/*'),
+                'Accept-Language': request.headers.get('Accept-Language', 'en-US,en;q=0.9'),
+                'Origin': 'https://www.youtube.com',
+                'Referer': 'https://www.youtube.com/',
+            },
             'nocheckcertificate': True,
             'ignoreerrors': False,
             'no_warnings': False,
-            'quiet': False
+            'quiet': False,
+            'geo_bypass': True,
+            'geo_bypass_country': 'US',
+            'extract_flat': False,
+            'force_generic_extractor': False,
+            'add_metadata': True,
+            'writethumbnail': True,
+            'writeinfojson': True,
+            'concurrent_fragment_downloads': 1,
+            'retry_sleep_functions': {'http': lambda n: 5},
+            'fragment_retries': 10,
+            'retries': 10,
+            'file_access_retries': 10,
+            'sleep_interval': 5,
+            'max_sleep_interval': 30,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
-            
-            # Create song entry
-            song = Song(
-                filename=os.path.basename(filename),
-                title=info.get('title'),
-                artist=info.get('uploader'),
-                file_path=filename
-            )
-            db.session.add(song)
-            db.session.commit()
-            
-            logger.info(f"Successfully downloaded: {filename}")
-            return jsonify({
-                'message': 'Download successful',
-                'filename': os.path.basename(filename)
-            })
-            
+            try:
+                # First try to extract info without downloading
+                info = ydl.extract_info(url, download=False)
+                if not info:
+                    raise Exception("Could not extract video information")
+                
+                # Check if video is available
+                if info.get('_type') == 'playlist':
+                    return jsonify({'error': 'Playlists are not supported'}), 400
+                
+                if info.get('is_live'):
+                    return jsonify({'error': 'Live streams are not supported'}), 400
+                
+                # Now download with the verified URL
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
+                
+                # Create song entry
+                song = Song(
+                    filename=os.path.basename(filename),
+                    title=info.get('title'),
+                    artist=info.get('uploader'),
+                    file_path=filename
+                )
+                db.session.add(song)
+                db.session.commit()
+                
+                logger.info(f"Successfully downloaded: {filename}")
+                return jsonify({
+                    'message': 'Download successful',
+                    'filename': os.path.basename(filename)
+                })
+            except Exception as e:
+                error_msg = str(e)
+                if "Sign in to confirm your age" in error_msg:
+                    return jsonify({'error': 'Age-restricted video. Please sign in to YouTube first.'}), 403
+                elif "Private video" in error_msg:
+                    return jsonify({'error': 'This video is private.'}), 403
+                elif "bot" in error_msg.lower():
+                    return jsonify({'error': 'YouTube thinks we are a bot. Please try again later or sign in.'}), 429
+                else:
+                    return jsonify({'error': error_msg}), 500
+                
     except Exception as e:
         logger.error(f"YouTube download error: {str(e)}")
         return jsonify({'error': str(e)}), 500
