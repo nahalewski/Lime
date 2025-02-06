@@ -171,7 +171,16 @@ def download_youtube():
                 'preferredquality': '192',
             }],
             'outtmpl': os.path.join(UPLOAD_DIR, '%(title)s.%(ext)s'),
-            'verbose': True
+            'verbose': True,
+            'cookiesfrombrowser': ('chrome',),
+            'extractor_args': {'youtube': {
+                'player_client': ['android'],
+                'player_skip': ['webpage', 'config'],
+            }},
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'no_warnings': False,
+            'quiet': False
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
