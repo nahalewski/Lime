@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.9-bullseye
 
 WORKDIR /app
 
@@ -11,6 +11,9 @@ RUN apt-get update && \
         build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Verify ffmpeg installation
+RUN ffmpeg -version
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
