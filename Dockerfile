@@ -12,13 +12,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create uploads directory and set permissions
-RUN mkdir -p uploads && \
-    chmod 777 uploads
+# Create uploads directory and data directory, set permissions
+RUN mkdir -p uploads data && \
+    chmod 777 uploads data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV FLASK_APP=app.py
+ENV SQLALCHEMY_DATABASE_URI=sqlite:///data/music.db
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-", "app:app"] 
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--log-level", "debug", "--access-logfile", "-", "--error-logfile", "-", "app:app"] 

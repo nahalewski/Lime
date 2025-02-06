@@ -44,7 +44,11 @@ def allowed_file(filename):
         mime = magic.Magic(mime=True)
         file_type = mime.from_file(filename)
         logger.info(f"File {filename} has MIME type: {file_type}")
-        return file_type.startswith('audio/')
+        
+        # Allow both audio files and M4A files (which might be detected as video/mp4)
+        return file_type.startswith('audio/') or (
+            file_type == 'video/mp4' and filename.lower().endswith('.m4a')
+        )
     except Exception as e:
         logger.error(f"Error checking file type for {filename}: {str(e)}")
         return False
@@ -134,7 +138,10 @@ def delete_song(song_id):
         logger.error(f"Error deleting song {song_id}: {str(e)}")
         return jsonify({'error': 'Failed to delete song'}), 500
 
+# Create database tables
+with app.app_context():
+    db.create_all()
+    logger.info("Database tables created successfully")
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host='0.0.0.0', port=5000, debug=True) 
