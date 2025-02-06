@@ -93,6 +93,80 @@
     </div>
 
     <script>
+        let currentAudio = null;
+        let currentSongId = null;
+        let songs = [];
+
+        // Define playSong globally first
+        window.playSong = function(id) {
+            console.log('Playing song with ID:', id);
+            const song = songs.find(s => s.id === id);
+            if (!song) {
+                console.error('Song not found:', id);
+                return;
+            }
+
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+
+            currentSongId = id;
+            currentAudio = new Audio(`/api/stream/${id}`);
+            currentAudio.volume = document.getElementById('volume-slider').value / 100;
+
+            currentAudio.addEventListener('timeupdate', () => {
+                const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
+                document.getElementById('audio-progress-bar').style.width = `${progress}%`;
+                document.getElementById('time-display').textContent = 
+                    `${formatTime(currentAudio.currentTime)} / ${formatTime(currentAudio.duration)}`;
+            });
+
+            currentAudio.addEventListener('play', () => {
+                const playPauseButton = document.getElementById('play-pause-button');
+                playPauseButton.innerHTML = '<i class="fas fa-pause"></i>';
+            });
+
+            currentAudio.addEventListener('pause', () => {
+                const playPauseButton = document.getElementById('play-pause-button');
+                playPauseButton.innerHTML = '<i class="fas fa-play"></i>';
+            });
+
+            currentAudio.addEventListener('ended', () => playNext());
+            currentAudio.addEventListener('error', (e) => {
+                console.error('Audio error:', e);
+            });
+
+            updateNowPlaying(song);
+            currentAudio.play().catch(e => {
+                console.error('Error playing audio:', e);
+            });
+            updateControls();
+        };
+
+        // Define deleteSong globally
+        window.deleteSong = function(id) {
+            if (confirm('Are you sure you want to delete this song?')) {
+                fetch(`/api/delete/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(() => {
+                    if (currentAudio && currentSongId === id) {
+                        currentAudio.pause();
+                        currentAudio = null;
+                        currentSongId = null;
+                        document.getElementById('audio-player').classList.add('translate-y-full');
+                    }
+                    document.querySelector('#song-list').innerHTML = '';
+                    loadSongs();
+                })
+                .catch(error => {
+                    console.error('Error deleting song:', error);
+                });
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             const dropZone = document.getElementById('drop-zone');
             const fileInput = document.getElementById('file-input');
@@ -111,18 +185,10 @@
             const timeDisplay = document.getElementById('time-display');
             const nowPlayingTitle = document.getElementById('now-playing-title');
 
-            let currentAudio = null;
-            let currentSongId = null;
-            let songs = [];
-
             function formatTime(seconds) {
                 const minutes = Math.floor(seconds / 60);
                 seconds = Math.floor(seconds % 60);
                 return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-            }
-
-            function updatePlayPauseIcon(isPlaying) {
-                playPauseButton.innerHTML = `<i class="fas fa-${isPlaying ? 'pause' : 'play'}"></i>`;
             }
 
             function updateNowPlaying(song) {
@@ -134,32 +200,18 @@
                 document.querySelector(`[data-song-id="${song.id}"]`)?.classList.add('playing');
             }
 
-            function playSong(id) {
-                const song = songs.find(s => s.id === id);
-                if (!song) return;
-
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio = null;
+            function updateControls() {
+                const prevButton = document.getElementById('prev-button');
+                const nextButton = document.getElementById('next-button');
+                
+                if (!currentSongId) {
+                    prevButton.disabled = true;
+                    nextButton.disabled = true;
+                    return;
                 }
-
-                currentSongId = id;
-                currentAudio = new Audio(`/api/stream/${id}`);
-                currentAudio.volume = volumeSlider.value / 100;
-
-                currentAudio.addEventListener('timeupdate', () => {
-                    const progress = (currentAudio.currentTime / currentAudio.duration) * 100;
-                    audioProgressBar.style.width = `${progress}%`;
-                    timeDisplay.textContent = `${formatTime(currentAudio.currentTime)} / ${formatTime(currentAudio.duration)}`;
-                });
-
-                currentAudio.addEventListener('play', () => updatePlayPauseIcon(true));
-                currentAudio.addEventListener('pause', () => updatePlayPauseIcon(false));
-                currentAudio.addEventListener('ended', () => playNext());
-
-                updateNowPlaying(song);
-                currentAudio.play();
-                updateControls();
+                const currentIndex = songs.findIndex(s => s.id === currentSongId);
+                prevButton.disabled = currentIndex <= 0;
+                nextButton.disabled = currentIndex >= songs.length - 1;
             }
 
             function playNext() {
@@ -169,26 +221,6 @@
                     playSong(songs[currentIndex + 1].id);
                 }
                 updateControls();
-            }
-
-            function playPrevious() {
-                if (!currentSongId) return;
-                const currentIndex = songs.findIndex(s => s.id === currentSongId);
-                if (currentIndex > 0) {
-                    playSong(songs[currentIndex - 1].id);
-                }
-                updateControls();
-            }
-
-            function updateControls() {
-                if (!currentSongId) {
-                    prevButton.disabled = true;
-                    nextButton.disabled = true;
-                    return;
-                }
-                const currentIndex = songs.findIndex(s => s.id === currentSongId);
-                prevButton.disabled = currentIndex <= 0;
-                nextButton.disabled = currentIndex >= songs.length - 1;
             }
 
             // Event Listeners
@@ -201,8 +233,15 @@
                 }
             });
 
-            prevButton.addEventListener('click', playPrevious);
-            nextButton.addEventListener('click', playNext);
+            prevButton.addEventListener('click', () => {
+                if (!currentSongId) return;
+                playSong(songs[songs.findIndex(s => s.id === currentSongId) - 1].id);
+            });
+
+            nextButton.addEventListener('click', () => {
+                if (!currentSongId) return;
+                playSong(songs[songs.findIndex(s => s.id === currentSongId) + 1].id);
+            });
 
             volumeSlider.addEventListener('input', () => {
                 if (currentAudio) {
@@ -304,7 +343,12 @@
                 fetch('/api/songs')
                     .then(response => response.json())
                     .then(songData => {
+                        console.log('Loaded songs:', songData);
                         songs = songData;
+                        const songList = document.getElementById('song-list');
+                        const noSongsMessage = document.getElementById('no-songs-message');
+                        const songCount = document.getElementById('song-count');
+                        
                         songList.innerHTML = '';
                         if (songs.length === 0) {
                             noSongsMessage.classList.remove('hidden');
@@ -338,42 +382,16 @@
                     })
                     .catch(error => {
                         console.error('Error loading songs:', error);
-                        songCount.textContent = 'Error loading songs';
+                        document.getElementById('song-count').textContent = 'Error loading songs';
                     });
             }
 
             // Initial load
             loadSongs();
-
+            
             // Refresh song list every 30 seconds
             setInterval(loadSongs, 30000);
         });
-
-        function deleteSong(id) {
-            if (confirm('Are you sure you want to delete this song?')) {
-                fetch(`/api/delete/${id}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(() => {
-                    if (currentAudio && currentSongId === id) {
-                        currentAudio.pause();
-                        currentAudio = null;
-                        currentSongId = null;
-                        document.getElementById('audio-player').classList.add('translate-y-full');
-                    }
-                    document.querySelector('#song-list').innerHTML = '';
-                    loadSongs();
-                })
-                .catch(error => {
-                    console.error('Error deleting song:', error);
-                });
-            }
-        }
-
-        // Make playSong available globally
-        window.playSong = playSong;
-        window.deleteSong = deleteSong;
     </script>
 </body>
 </html> 
