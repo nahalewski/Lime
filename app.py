@@ -7,6 +7,7 @@ import magic
 import logging
 import yt_dlp
 import re
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,18 +19,24 @@ app = Flask(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
+COOKIES_DIR = os.path.join(DATA_DIR, 'cookies')
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(COOKIES_DIR, exist_ok=True)
 
 # Set permissions for directories
 os.chmod(DATA_DIR, 0o777)
 os.chmod(UPLOAD_DIR, 0o777)
+os.chmod(COOKIES_DIR, 0o777)
 
 # Configure app
 app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(DATA_DIR, "music.db")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# YouTube credentials file
+YOUTUBE_COOKIES_FILE = os.path.join(COOKIES_DIR, 'youtube.json')
 
 db = SQLAlchemy(app)
 
@@ -153,6 +160,22 @@ def delete_song(song_id):
         logger.error(f"Error deleting song {song_id}: {str(e)}")
         return jsonify({'error': 'Failed to delete song'}), 500
 
+@app.route('/api/settings/youtube', methods=['POST'])
+def update_youtube_settings():
+    try:
+        data = request.get_json()
+        if not data or 'cookies' not in data:
+            return jsonify({'error': 'No cookie data provided'}), 400
+            
+        # Save cookies to file
+        with open(YOUTUBE_COOKIES_FILE, 'w') as f:
+            json.dump(data['cookies'], f)
+            
+        return jsonify({'message': 'YouTube settings updated successfully'})
+    except Exception as e:
+        logger.error(f"Error updating YouTube settings: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/youtube/download', methods=['POST'])
 def download_youtube():
     try:
@@ -163,6 +186,15 @@ def download_youtube():
         url = data['url']
         logger.info(f"Downloading from YouTube: {url}")
         
+        # Load cookies if they exist
+        cookies = None
+        if os.path.exists(YOUTUBE_COOKIES_FILE):
+            try:
+                with open(YOUTUBE_COOKIES_FILE, 'r') as f:
+                    cookies = json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading YouTube cookies: {str(e)}")
+        
         ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -172,10 +204,11 @@ def download_youtube():
             }],
             'outtmpl': os.path.join(UPLOAD_DIR, '%(title)s.%(ext)s'),
             'verbose': True,
-            'cookiesfrombrowser': ('chrome',),
+            'cookiefile': YOUTUBE_COOKIES_FILE if cookies else None,
+            'cookiesfrombrowser': None,  # Disable browser cookies when using file
             'extractor_args': {'youtube': {
-                'player_client': ['android'],
-                'player_skip': ['webpage', 'config'],
+                'player_client': ['android', 'web'],
+                'player_skip': [],  # Don't skip anything when authenticated
             }},
             'nocheckcertificate': True,
             'ignoreerrors': False,
